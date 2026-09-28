@@ -1,47 +1,111 @@
-# Sistema de Inventario
 
-Programa de consola en Python para gestionar un inventario de productos:
-registrar, listar, buscar, actualizar, eliminar y controlar entradas/salidas
-de stock.
+# Sistema de Inventario con Python y MySQL
+
+Sistema de gestión de inventarios desarrollado en Python
+y MySQL. Permite administrar productos, controlar
+existencias y registrar movimientos de mercancía.
+
+## Funcionalidades
+
+- Registrar nuevos productos.
+- Consultar y buscar productos.
+- Actualizar información de productos.
+- Eliminar productos.
+- Registrar entradas y salidas de mercancía.
+- Consultar productos con existencias bajas.
+- Visualizar el historial de movimientos.
+
+## Tecnologías utilizadas
+
+- Python
+- MySQL 8
+- Programación orientada a objetos
+- Pipenv
+- Git y GitHub
 
 ## Estructura del proyecto
 
+```text
+invetario/
+├── database/
+│   └── inventario.sql
+├── .env.example
+├── .gitignore
+├── Pipfile
+├── Pipfile.lock
+├── Readme.md
+├── conexion.py
+├── inventario.py
+├── main.py
+├── movimiento.py
+├── producto.py
+└── validaciones.py
+```
 
-├── main.py         # Punto de entrada: menú principal y ciclo de control
-├── producto.py     # Clase Producto y funciones de entrada validada (precio, stock)
-├── inventario.py   # Funciones que operan sobre la lista de productos
-└── README.md
+## Instalación
 
+### 1. Clonar el repositorio
 
-### producto.py
-- *pedir_precio()*: pide un precio por teclado, valida que sea numérico y mayor a 0.
-- *pedir_stock()*: pide un stock por teclado, valida que sea entero y no negativo.
-- *Producto*: clase con atributos nombre, descripcion, precio, stock,
-  categoria y el método mostrar() para imprimir la información formateada.
+```bash
+git clone https://github.com/nandillo156-bot/sistema-inventario-python.git
+cd sistema-inventario-python
+```
 
-### inventario.py
-Funciones que reciben la lista productos y operan sobre ella:
+### 2. Instalar las dependencias
 
-| Función | Descripción |
-|---|---|
-| registrar_producto(productos) | Pide datos y agrega un nuevo Producto a la lista |
-| listar_productos(productos) | Muestra todos los productos registrados |
-| buscar_producto(productos) | Busca por coincidencia parcial del nombre |
-| actualizar_producto(productos) | Modifica descripción, precio, stock y categoría |
-| eliminar_producto(productos) | Elimina un producto de la lista por nombre |
-| entrada_stock(productos) | Suma unidades al stock de un producto |
-| salida_stock(productos) | Resta unidades, validando que no quede negativo |
-| productos_stock_bajo(productos) | Muestra productos con stock ≤ 5 |
+Es necesario tener Python, Pipenv y MySQL instalados.
 
-### main.py
-Importa las funciones de inventario.py y ejecuta el menú principal dentro
-de un ciclo while True, delegando cada opción a la función correspondiente.
+```bash
+pipenv install
+```
 
-## Cómo ejecutar
+### 3. Configurar MySQL
 
-bash
-python main.py
+Abre MySQL Workbench y ejecuta el archivo:
 
+`database/inventario.sql`
 
-Asegúrate de que los tres archivos .py estén en la misma carpeta, ya que
-main.py depende de inventario.py, y este a su vez de producto.py.
+Este script crea la base de datos y las tablas necesarias.
+
+### 4. Configurar las variables de entorno
+
+Crea un archivo `.env` tomando como referencia
+el archivo `.env.example`.
+
+Introduce tus propias credenciales de MySQL.
+
+Nunca publiques el archivo `.env`.
+
+### 5. Ejecutar el programa
+
+```bash
+pipenv run python main.py
+```
+
+## Base de datos
+
+El sistema utiliza dos tablas:
+
+**productos:** almacena el nombre, descripción,
+precio, existencias y categoría de cada producto.
+
+**movimientos:** registra las entradas y salidas,
+incluyendo la cantidad, las existencias anteriores,
+las nuevas existencias y la fecha del movimiento.
+
+Ambas tablas están relacionadas mediante
+el identificador del producto.
+
+## Próximas mejoras
+
+- Desarrollo de una interfaz web con Flask.
+- Creación de un panel de control.
+- Implementación de pruebas automatizadas.
+
+## Autor
+
+Fernando Ramos Alba
+
+Estudiante de Ingeniería en Desarrollo de Software.
+
+GitHub: https://github.com/nandillo156-bot
