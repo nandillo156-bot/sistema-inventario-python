@@ -17,3 +17,7 @@ venv/
 # Archivos del sistema
 .DS_Store
 Thumbs.db
+
+.coverage
+htmlcov/
+.pytest_cache/
