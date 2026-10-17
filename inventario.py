@@ -11,7 +11,7 @@ from conexion import conectar
 
 
 def registrar_producto():
-    nombre = input("Nombre: ")
+    nombre = input("Nombre: ").strip()
 
     conexion = conectar()
     cursor = conexion.cursor()

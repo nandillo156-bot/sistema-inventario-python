@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Registrar producto</title>
+</head>
+
+<body>
+
+    <h1>Registrar producto</h1>
+    {% if error %}
+    <p>
+        {{ error }}
+    </p>
+    {% endif %}
+    <form method="POST">
+
+        <label>Nombre:</label>
+        <input
+        type="text"
+        name="nombre"
+        value="{{ request.form.get('nombre', '') }}"
+        required
+        >
+
+        <br><br>
+
+        <label>Descripción:</label>
+        <input
+        type="text"
+        name="descripcion"
+        value="{{ request.form.get('descripcion', '') }}"
+        required
+        >
+
+        <br><br>
+
+        <label>Precio:</label>
+        <input
+        type="number"
+        name="precio"
+        step="0.01"
+        min="0.01"
+        value="{{ request.form.get('precio', '') }}"
+        required
+        >
+
+        <br><br>
+
+        <label>Stock:</label>
+        <input
+        type="number"
+        name="stock"
+        min="0"
+        value="{{ request.form.get('stock', '') }}"
+        required
+        >
+
+        <br><br>
+
+        <label>Categoría:</label>
+        <input
+        type="text"
+        name="categoria"
+        value="{{ request.form.get('categoria', '') }}"
+        required
+        >
+
+        <br><br>
+
+        <button type="submit">
+            Registrar producto
+        </button>
+
+    </form>
+
+    <br>
+
+    <a href="/productos">Volver a productos</a>
+
+</body>
+
+</html>

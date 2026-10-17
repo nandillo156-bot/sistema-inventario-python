@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Productos</title>
+</head>
+
+<body>
+
+    <h1>Productos</h1>
+    {% with mensajes = get_flashed_messages(with_categories=true) %}
+
+        {% if mensajes %}
+
+            {% for categoria, mensaje in mensajes %}
+
+                <div class="mensaje {{ categoria }}">
+                    {{ mensaje }}
+                </div>
+
+            {% endfor %}
+
+        {% endif %}
+
+    {% endwith %}
+    <a href="/registrar">Registrar nuevo producto</a>
+
+    <br><br>
+
+    {% if productos %}
+
+        <table border="1">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Nombre</th>
+                    <th>Descripción</th>
+                    <th>Precio</th>
+                    <th>Stock</th>
+                    <th>Categoría</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+
+            <tbody>
+
+                {% for producto in productos %}
+
+                    <tr>
+                        <td>{{ producto[0] }}</td>
+                        <td>{{ producto[1] }}</td>
+                        <td>{{ producto[2] }}</td>
+                        <td>${{ producto[3] }}</td>
+                        <td>{{ producto[4] }}</td>
+                        <td>{{ producto[5] }}</td>
+                    <td>
+                        <a href="{{ url_for('editar_producto', id=producto[0]) }}">
+                            Editar
+                        </a>
+
+                        <form
+                            action="{{ url_for('eliminar_producto', id=producto[0]) }}"
+                            method="POST"
+                            style="display: inline;"
+                        >
+                            <button
+                                type="submit"
+                                onclick="return confirm('¿Seguro que deseas eliminar este producto?');"
+                            >
+                                Eliminar
+                            </button>
+                        </form>
+                    </td>
+                    </tr>
+
+                {% endfor %}
+
+            </tbody>
+        </table>
+
+    {% else %}
+
+        <p>No hay productos registrados.</p>
+
+    {% endif %}
+
+    <br>
+
+    <a href="/">Volver al inicio</a>
+
+</body>
+</html>

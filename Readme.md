@@ -1,152 +1,186 @@
-# Sistema de Inventario con Python y MySQL
+# Sistema de inventario con Python, Flask y MySQL
 
-Aplicación de consola para administrar productos, controlar existencias y consultar movimientos de mercancía almacenados en MySQL.
+Proyecto de portafolio para gestionar productos, existencias e historial de movimientos. El panel de HTML, CSS y JavaScript utiliza una API Flask que delega las operaciones en un servicio de inventario. También se conserva la versión de consola.
 
-## Funcionalidades
+**Autor:** Fernando Ramos Alba · Estudiante de Ingeniería en Desarrollo de Software · [GitHub](https://github.com/nandillo156-bot)
 
-| Opción | Función | Comportamiento |
-| --- | --- | --- |
-| 1 | Registrar producto | Guarda nombre, descripción, precio, stock y categoría. Rechaza nombres ya registrados sin distinguir mayúsculas de minúsculas. |
-| 2 | Listar productos | Muestra los productos ordenados por ID. |
-| 3 | Buscar producto | Busca por nombre completo sin distinguir mayúsculas de minúsculas. |
-| 4 | Actualizar producto | Modifica descripción, precio y categoría de un producto existente. |
-| 5 | Eliminar producto | Solicita confirmación. La restricción de clave foránea impide eliminar productos con movimientos registrados. |
-| 6 | Entrada de stock | Suma existencias y registra la entrada en el historial. |
-| 7 | Salida de stock | Resta existencias y registra la salida; rechaza cantidades superiores al stock disponible. |
-| 8 | Productos con stock bajo | Muestra productos con stock menor o igual a 5, ordenados por stock ascendente. |
-| 9 | Historial de movimientos | Muestra producto, tipo, cantidad, stock anterior, stock actual y fecha, ordenados por ID del movimiento. |
-| 10 | Salir | Finaliza el programa. |
+## Qué puedes hacer
 
-Al registrar un producto, su nombre, descripción y categoría no pueden estar vacíos. El precio debe ser mayor que cero y el stock debe ser un entero no negativo. Las entradas y salidas requieren cantidades enteras mayores que cero. El stock se modifica mediante las opciones de entrada y salida.
+- Registrar, consultar, editar y eliminar productos sin historial.
+- Buscar productos y filtrar los que tienen 5 unidades o menos.
+- Registrar entradas y salidas sin permitir existencias negativas.
+- Consultar los últimos 200 movimientos desde el panel web.
+- Ver el número de productos, las unidades disponibles y las alertas de stock bajo.
 
-## Tecnologías y requisitos
+El panel modifica las existencias mediante movimientos. El servicio guarda el cambio de stock y el historial en una misma transacción y bloquea el producto durante la operación. Editar sus datos conserva las existencias.
 
-- Python 3.14, según `Pipfile`.
-- MySQL 8 (el entorno en la nube se validó con MySQL 8.4).
-- Pipenv para gestionar las dependencias de `Pipfile.lock`.
-- `mysql-connector-python` para acceder a MySQL y `python-dotenv` para cargar `.env`.
-- `pytest` y `pytest-cov` para pruebas y cobertura.
+## Tecnologías
 
-## Estructura del proyecto
+Python 3.14, Flask, MySQL 8.0.16 o posterior, HTML, CSS, JavaScript, mysql-connector-python, python-dotenv, Pipenv y pytest. Las versiones de las dependencias están fijadas en `Pipfile.lock`.
 
-```text
-sistema-inventario-python/
-├── database/
-│   └── inventario.sql
-├── tests/
-│   ├── test_inventario.py
-│   ├── test_producto.py
-│   └── test_validaciones.py
-├── .env.example
-├── .gitignore
-├── Pipfile
-├── Pipfile.lock
-├── pytest.ini
-├── Readme.md
-├── conexion.py
-├── inventario.py
-├── main.py
-├── movimiento.py
-├── producto.py
-├── prueba_mysql.py
-└── validaciones.py
-```
+## Ejecutar en tu equipo
 
-## Instalación local
+### 1. Clonar e instalar
 
-### 1. Obtener el repositorio
+Necesitas Python 3.14, Pipenv y un servidor MySQL en ejecución. El cliente `mysql` debe estar disponible para importar el esquema; también puedes ejecutar el archivo SQL desde MySQL Workbench.
 
 ```bash
 git clone https://github.com/nandillo156-bot/sistema-inventario-python.git
 cd sistema-inventario-python
-```
-
-### 2. Instalar las dependencias
-
-Con Python 3.14 y Pipenv instalados, usa las versiones del archivo de bloqueo:
-
-```bash
+python -m pip install pipenv
 pipenv sync --dev
 ```
 
-### 3. Preparar MySQL
+### 2. Crear la base de datos
 
-Inicia MySQL y crea la base de datos y las tablas descritas en la sección «Base de datos». El archivo `database/inventario.sql` está vacío actualmente: ejecutarlo no crea el esquema. Para una instalación local, debes preparar ese esquema antes de usar las funciones del inventario.
-
-### 4. Configurar la conexión
-
-Crea un archivo `.env` en la raíz del proyecto con los siguientes campos y los datos de tu instancia de MySQL:
-
-```dotenv
-DB_HOST=127.0.0.1
-DB_USER=tu_usuario
-DB_PASSWORD=tu_clave
-DB_DATABASE=inventario
-```
-
-`conexion.py` carga estas variables mediante `python-dotenv`. Sustituye los valores de ejemplo por tu configuración. `.env` está excluido de Git; no publiques credenciales.
-
-### 5. Ejecutar la aplicación
+Desde la raíz del proyecto abre el cliente MySQL. `-p` solicita tu contraseña sin escribirla en el comando:
 
 ```bash
-pipenv run python main.py
+mysql -h 127.0.0.1 -P 3306 -u tu_usuario -p
 ```
 
-Selecciona una opción del menú y responde a las preguntas de la consola.
+Dentro del cliente, ejecuta:
 
-## Entorno en la nube preparado
+```sql
+SOURCE database/inventario.sql;
+SHOW TABLES FROM inventario;
+```
 
-En el entorno configurado durante el onboarding, el checkout está en `/workspace/sistema-inventario-python`. Ya dispone de Python 3.14.7 y un entorno virtual `.venv` con las dependencias de `Pipfile.lock` verificadas por hash. Desde ese directorio:
+El usuario necesita permisos para crear la base y las tablas. El script crea `inventario`, `productos` y `movimientos` si no existen, sin borrar datos. **No actualiza la estructura de tablas antiguas**: si ya tienes una base, revisa su estructura antes de reutilizarla.
+
+Se requiere MySQL 8.0.16 o posterior porque versiones anteriores no aplican las restricciones `CHECK`. Consulta la [documentación de MySQL](https://dev.mysql.com/doc/refman/8.0/en/create-table-check-constraints.html).
+
+### 3. Configurar `.env`
+
+Si ya tienes un archivo `.env`, edítalo conservando tus credenciales. Para crear uno nuevo, copia `.env.example`. En PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+En macOS o Linux:
 
 ```bash
-# Iniciar MySQL y verificar la conexión y las tablas
-.venv/bin/python /workspace/.onboarding/inventario/start.py
-
-# Abrir el menú interactivo
-.venv/bin/python main.py
-
-# Ejecutar las pruebas
-.venv/bin/python -m pytest
+cp .env.example .env
 ```
 
-El helper externo al repositorio inicia el contenedor `inventario-dev-mysql` con MySQL 8.4, accesible en `127.0.0.1:3306`, y conserva los datos en `/workspace/.onboarding/inventario/mysql-data`. Las credenciales locales se generan durante la preparación y se guardan en archivos privados.
+Configura `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` y `DB_DATABASE` con los datos de tu instancia. El esquema inicial usa `inventario` como nombre de base. `.env` está excluido de Git.
 
-Como el SQL versionado está vacío, este helper crea un esquema de desarrollo inferido de las consultas del código. No constituye una migración oficial para producción. El helper y las rutas anteriores pertenecen al entorno preparado; no se incluyen al clonar el repositorio en otra máquina.
+### 4. Abrir el panel Flask
 
-## Base de datos
+```bash
+pipenv run python app.py
+```
 
-La aplicación espera las siguientes tablas:
+Abre [http://127.0.0.1:5000](http://127.0.0.1:5000). La aplicación se ejecuta en la interfaz local y con debug desactivado.
 
-| Tabla | Columnas utilizadas |
+`web_app.py` es una entrada compatible al mismo servidor Flask:
+
+```bash
+pipenv run python web_app.py
+pipenv run python web_app.py --port 8001
+```
+
+El primer comando usa [http://127.0.0.1:8000](http://127.0.0.1:8000); el segundo usa [http://127.0.0.1:8001](http://127.0.0.1:8001). Ejecuta uno de los comandos para iniciar el panel.
+
+La consola sigue disponible con `pipenv run python main.py`; todavía usa las operaciones de `inventario.py` y su migración al servicio compartido está pendiente.
+
+`FLASK_SECRET_KEY` es opcional para esta ejecución local. Flask recibe una clave temporal si no se configura. La aplicación todavía no implementa usuarios ni autenticación.
+
+## Cómo se organiza el código
+
+```text
+sistema-inventario-python/
+├── .github/workflows/tests.yml  # Pruebas automáticas en GitHub
+├── database/inventario.sql      # Esquema inicial de MySQL
+├── docs/guia-codigo.md          # Recorrido explicado y ejercicios
+├── tests/                      # Modelo, servicio y API con conexiones simuladas
+├── web/                        # HTML, CSS y JavaScript del panel
+├── templates/                  # Referencia de los formularios anteriores
+├── app.py                      # Factory Flask, rutas HTTP y respuestas JSON
+├── web_app.py                  # Entrada compatible al mismo servidor Flask
+├── servicio_inventario.py      # Validación y operaciones SQL del panel
+├── main.py                     # Menú de consola
+├── inventario.py               # Operaciones de consola pendientes de migrar
+├── producto.py                 # Modelo y validación del producto
+├── movimiento.py               # Representación de un movimiento de consola
+├── validaciones.py             # Reglas de precio/stock y lectura de consola
+├── conexion.py                 # Conexión a MySQL desde variables de entorno
+├── .env.example                # Configuración de ejemplo sin datos personales
+├── Pipfile
+└── Pipfile.lock
+```
+
+`create_app(config=None)` construye la aplicación y permite cambiar su configuración en las pruebas. Las rutas de `app.py` reciben HTTP; `servicio_inventario.py` recibe datos de Python, aplica las reglas y consulta MySQL sin conocer las peticiones HTTP. Este patrón está descrito en la [guía oficial de factories de Flask](https://flask.palletsprojects.com/en/stable/patterns/appfactories/).
+
+La [guía del código](docs/guia-codigo.md) explica el recorrido desde un clic hasta MySQL, la separación entre rutas y reglas y el uso de `with`, `yield` y `finally` para cerrar recursos.
+
+## API del panel local
+
+| Método | Ruta | Operación y respuesta correcta |
+| --- | --- | --- |
+| GET | `/api/productos` | Listar productos, 200. |
+| POST | `/api/productos` | Registrar un producto, 201 con su `id` y cabecera `Location`. |
+| GET | `/api/productos/{id}` | Consultar un producto, 200. |
+| PUT | `/api/productos/{id}` | Editar datos sin cambiar stock, 200. |
+| DELETE | `/api/productos/{id}` | Eliminar si no tiene movimientos, 200. |
+| GET | `/api/movimientos` | Consultar los últimos 200 movimientos, 200. |
+| POST | `/api/productos/{id}/movimientos` | Registrar una entrada o salida, 201 con el nuevo stock. |
+
+Las escrituras reciben un objeto JSON con `Content-Type: application/json`. Para crear un producto se requieren `nombre`, `descripcion`, `precio`, `stock` y `categoria`. Para editar se requieren los mismos campos salvo `stock`: es opcional y se ignora si se envía. El stock guardado se lee dentro de la transacción. Un movimiento requiere `tipo` (`Entrada` o `Salida`) y `cantidad` entera positiva.
+
+Los errores se devuelven como JSON con la forma `{"error": "mensaje"}`:
+
+| Estado HTTP | Significado |
 | --- | --- |
-| `productos` | `id`, `nombre`, `descripcion`, `precio`, `stock`, `categoria` |
-| `movimientos` | `id`, `producto_id`, `tipo`, `cantidad`, `stock_anterior`, `stock_actual`, `fecha` |
+| 400 | Datos o JSON inválidos. |
+| 403 | La escritura incluye un `Origin` distinto del servidor. |
+| 404 | Producto o ruta inexistente. |
+| 405 | Método HTTP no admitido para la ruta. |
+| 409 | Nombre duplicado o intento de borrar un producto con historial. |
+| 410 | Envío a uno de los formularios anteriores, ya retirados. |
+| 413 | Petición de API superior al límite de 65 536 bytes. |
+| 415 | El cuerpo enviado no usa `application/json`. |
+| 503 | Error al acceder a MySQL; los detalles internos no se devuelven al navegador. |
 
-Los ID deben generarse automáticamente. `movimientos.producto_id` referencia `productos.id`; la clave foránea debe impedir eliminar productos que tengan movimientos. `fecha` debe tener un valor predeterminado de fecha y hora, ya que el código no lo proporciona al insertar movimientos. Usa tablas transaccionales (por ejemplo, InnoDB) y un tipo decimal para el precio.
+`/` y `/productos` sirven el panel existente de `web/`. Las visitas GET a `/registrar` y `/editar/{id}` redirigen al panel. Los POST a esas rutas y a `/eliminar/{id}` devuelven 410 sin consultar la base. Los archivos de `templates/` se conservan como referencia y ya no tienen rutas activas que los rendericen.
 
-Cada entrada o salida actualiza el stock e inserta un movimiento con tipo `Entrada` o `Salida`, cantidad y existencias anteriores y posteriores.
+Flask admite hosts locales (`localhost`, `127.0.0.1` y `::1`). Las escrituras que incluyen `Origin` deben coincidir con el origen del servidor. Estas comprobaciones acompañan el uso local; la autenticación y el despliegue público siguen pendientes.
 
-## Pruebas automatizadas
+## Base de datos y reglas
 
-Desde la raíz del proyecto:
+`productos` guarda el catálogo. `movimientos.producto_id` referencia a un producto y conserva tipo, cantidad, stock anterior, stock actual y fecha automática.
+
+- El nombre es único sin distinguir mayúsculas y minúsculas; los acentos sí se distinguen.
+- Nombre y categoría admiten hasta 255 caracteres; descripción se guarda como `TEXT`.
+- MySQL guarda el precio como `DECIMAL(10,2)`. El modelo acepta precios finitos entre `0.01` y `99999999.99` y rechaza booleanos.
+- Stock y cantidades se limitan al rango de `INT`: hasta `2147483647`. El stock puede ser cero; una cantidad de movimiento debe ser positiva.
+- Una clave foránea impide borrar productos con historial, y los `CHECK` verifican cantidades positivas y balances de cada movimiento.
+
+La precisión de precios con más de dos decimales todavía requiere una política explícita de redondeo y el uso de `Decimal` de extremo a extremo.
+
+## Pruebas y validación
 
 ```bash
-pipenv run python -m pytest
-pipenv run python -m pytest --cov=producto --cov=validaciones --cov=inventario --cov=movimiento --cov=conexion --cov-report=term-missing
+pipenv run python -m pytest -q
 ```
 
-Las pruebas existentes comprueban la clase `Producto`, las validaciones de entrada y las operaciones de inventario utilizando conexiones MySQL simuladas. No requieren una base de datos activa y no sustituyen una comprobación de la conexión real. Durante la preparación del entorno se ejecutaron 34 pruebas con resultado satisfactorio y se verificaron operaciones reales con MySQL.
+Las pruebas no requieren MySQL activo. Comprueban el modelo, las validaciones, la consola, el servicio y las respuestas HTTP usando el cliente de pruebas de Flask y conexiones simuladas. Cubren la conservación del stock al editar, movimientos, conflictos, rollback y cierre de recursos. También prueban recorridos de una ruta Flask hasta el servicio con la base simulada.
 
-## Próximas mejoras
+En la comprobación local de esta etapa se confirmó la conexión a MySQL y la presencia de las columnas requeridas en las tablas existentes. El panel Flask también se abrió en el navegador y consultó datos reales sin realizar escrituras. **No se ha importado el nuevo esquema ni verificado sus restricciones en una base desechable**; esa integración y los flujos completos de escritura en el navegador siguen pendientes.
 
-- Añadir un script SQL versionado para crear el esquema.
-- Ampliar las pruebas de integración con una base de datos real.
-- Desarrollar una interfaz web y un panel de control.
+El workflow de GitHub Actions instala las dependencias del archivo de bloqueo y ejecuta la suite en cada push y pull request. Su ejecución remota se comprobará cuando se publique el cambio.
 
-## Autor
+## Estado y siguientes mejoras
 
-Fernando Ramos Alba
+La unificación web está implementada: el panel usa Flask y un servicio de inventario común. Los comandos `app.py` y `web_app.py` arrancan la misma aplicación. Esta etapa deja una aplicación local; todavía no hay una demo pública desplegada.
 
-Estudiante de Ingeniería en Desarrollo de Software.
+Las siguientes iteraciones son:
 
-GitHub: https://github.com/nandillo156-bot
+1. Migrar la consola al servicio para compartir validación, transacciones y manejo de errores.
+2. Añadir pruebas de integración con MySQL y pruebas del navegador completo.
+3. Definir el tratamiento de precios con más de dos decimales y usar `Decimal` de extremo a extremo.
+4. Revisar el diseño adaptable y la accesibilidad, preparar capturas y documentar una demo.
+5. Añadir autenticación y preparar el despliegue público.
+
+La guía explica estas decisiones para poder defenderlas en una entrevista.

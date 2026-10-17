@@ -162,7 +162,7 @@ def test_registrar_producto_duplicado(monkeypatch, capsys):
 
     monkeypatch.setattr(
         "builtins.input",
-        lambda _: "Teclado"
+        lambda _: "  Teclado  "
     )
 
     inventario.registrar_producto()
@@ -173,6 +173,7 @@ def test_registrar_producto_duplicado(monkeypatch, capsys):
 
     # Solo debe ejecutarse el SELECT
     assert cursor_falso.execute.call_count == 1
+    assert cursor_falso.execute.call_args.args[1] == ("Teclado",)
 
     # No debe guardar nada
     conexion_falsa.commit.assert_not_called()
@@ -271,31 +272,9 @@ def test_salida_stock_correctamente(monkeypatch, capsys):
         lambda: conexion_falsa
     )
 
-def test_salida_stock_insuficiente_y_luego_valida(monkeypatch, capsys):
-    cursor_falso = MagicMock()
-    conexion_falsa = MagicMock()
-
-    conexion_falsa.cursor.return_value = cursor_falso
-
-    cursor_falso.fetchone.return_value = (
-        1,
-        "Teclado",
-        "Teclado mecánico",
-        850.50,
-        10,
-        "Periféricos"
-    )
-
-    monkeypatch.setattr(
-        inventario,
-        "conectar",
-        lambda: conexion_falsa
-    )
-
     respuestas = iter([
         "Teclado",
-        "15",   # No hay suficiente stock
-        "4"     # Cantidad válida
+        "4"
     ])
 
     monkeypatch.setattr(
@@ -307,19 +286,20 @@ def test_salida_stock_insuficiente_y_luego_valida(monkeypatch, capsys):
 
     salida = capsys.readouterr()
 
-    assert "Error: no hay suficiente stock" in salida.out
     assert "Salida registrada correctamente." in salida.out
+    assert "Stock anterior: 10" in salida.out
+    assert "Stock actual: 6" in salida.out
 
     llamadas = cursor_falso.execute.call_args_list
 
     assert len(llamadas) == 3
 
-    # UPDATE
+    assert "UPDATE productos" in llamadas[1][0][0]
     valores_update = llamadas[1][0][1]
 
     assert valores_update == (6, 1)
 
-    # INSERT del movimiento
+    assert "INSERT INTO movimientos" in llamadas[2][0][0]
     valores_movimiento = llamadas[2][0][1]
 
     assert valores_movimiento == (
@@ -331,6 +311,10 @@ def test_salida_stock_insuficiente_y_luego_valida(monkeypatch, capsys):
     )
 
     conexion_falsa.commit.assert_called_once()
+    cursor_falso.close.assert_called_once()
+    conexion_falsa.close.assert_called_once()
+
+
 def test_salida_stock_insuficiente_y_luego_valida(monkeypatch, capsys):
     cursor_falso = MagicMock()
     conexion_falsa = MagicMock()
@@ -385,6 +369,10 @@ def test_salida_stock_insuficiente_y_luego_valida(monkeypatch, capsys):
     )
 
     conexion_falsa.commit.assert_called_once()
+    cursor_falso.close.assert_called_once()
+    conexion_falsa.close.assert_called_once()
+
+
 def test_actualizar_producto_correctamente(monkeypatch, capsys):
     cursor_falso = MagicMock()
     conexion_falsa = MagicMock()
