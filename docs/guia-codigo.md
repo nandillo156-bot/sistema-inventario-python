@@ -4,21 +4,27 @@ La meta es que puedas construir, modificar y explicar una aplicación web comple
 
 ## 1. Del navegador a la base de datos
 
-**Frontend:** es lo que ves y usas en el navegador. `web/index.html` define botones, tablas y formularios; `web/style.css` decide cómo se ven; `web/app.js` responde a los clics y solicita datos al servidor.
+**Frontend:** es lo que ves y usas en el navegador. `web/index.html` define botones, tablas y formularios; `web/style.css` decide cómo se ven; `web/app.js` comprueba la sesión, responde a los clics y solicita datos al servidor. La pantalla de acceso está en `web/login.html`, con su lógica en `web/login.js` y sus estilos en `web/auth.css`.
 
-**Rutas Flask:** `app.py` recibe las peticiones HTTP, lee JSON y decide qué función del servicio llamar. Después convierte el resultado en una respuesta HTTP.
+**Rutas Flask:** `app.py` recibe las peticiones HTTP, comprueba sesión, permisos y CSRF, lee JSON y decide qué función del servicio llamar. Después convierte el resultado en una respuesta HTTP. `usuarios.py` gestiona las cuentas y sus hashes; `seguridad.py` define los permisos por rol y el límite de intentos de acceso.
 
 **Servicio de inventario:** `servicio_inventario.py` valida los datos y ejecuta las operaciones SQL. Recibe y devuelve objetos de Python; puede utilizarse sin un navegador ni Flask.
 
 **Base de datos:** MySQL conserva los productos y los movimientos aunque cierres el navegador o detengas Python. `conexion.py` abre la conexión y `database/inventario.sql` define las tablas y sus restricciones.
 
+**Demostración:** con `APP_MODE=demo`, las consultas usan únicamente los datos ficticios de `demo.py`. No se abre una conexión a MySQL y el backend rechaza las escrituras.
+
 ```mermaid
 flowchart LR
     A[Usuario] --> B[Panel de web/]
     B -->|HTTP con JSON| C[Rutas Flask en app.py]
-    C --> D[servicio_inventario.py]
+    C -->|Modo privado| H[Sesión y permisos]
+    H --> U[usuarios.py]
+    H --> D[servicio_inventario.py]
+    C -->|Modo demo| J[demo.py: solo lectura]
     D --> E[Producto y validaciones]
     D --> F[conexion.py]
+    U --> F
     F --> G[(MySQL)]
     G -->|Resultados| D
     D -->|Datos de Python| C
@@ -46,18 +52,73 @@ El cliente de pruebas llama a Flask sin abrir un navegador. Este patrón permite
 
 `pipenv run python web_app.py` sigue funcionando en el puerto 8000; `--port 8001` cambia ese puerto. Es una entrada compatible que importa la misma aplicación Flask. La consola se inicia con `main.py` y todavía tiene sus operaciones propias en `inventario.py`.
 
+`configuracion_web.py` separa dos decisiones: `APP_MODE` elige `private` o `demo`, y `APP_ENV` elige `development` o `production`. Los valores por defecto son `private` y `development`. En producción se exige una `FLASK_SECRET_KEY` persistente de al menos 32 caracteres y se activa `Secure` en la cookie; para utilizarla necesitas HTTPS. `TRUSTED_HOSTS` permite configurar los dominios aceptados. Estos ajustes todavía necesitan un despliegue y una configuración de servidor adecuados.
+
+En modo privado primero debes preparar el acceso. Para una instalación existente:
+
+```bash
+pipenv run flask --app app inicializar-acceso
+pipenv run flask --app app crear-usuario --nombre fernando --rol administrador
+```
+
+El primer comando crea solo la tabla `usuarios`, conservando productos y movimientos. El segundo pide y confirma una contraseña oculta de entre 12 y 128 caracteres. No hay una cuenta ni una clave predeterminada. Consulta los pasos completos en el [README](../Readme.md) y en la [guía de acceso y permisos](acceso-y-permisos.md).
+
 ## 3. Qué pasa al abrir el panel
 
 1. La ruta `/` de Flask devuelve `web/index.html`.
 2. El navegador solicita `/style.css` y `/app.js`, que también sirve Flask.
-3. JavaScript ejecuta `load()` en `web/app.js`.
-4. `load()` llama a `api('/api/productos')` y `api('/api/movimientos')`; `api()` utiliza `fetch()` para enviar las peticiones.
-5. Flask busca la ruta que corresponde a cada método y dirección.
-6. La ruta llama a `servicio_inventario.listar_productos()` o `listar_movimientos()`.
-7. El servicio consulta MySQL y devuelve una lista de diccionarios. Flask la convierte a JSON.
-8. JavaScript recibe los datos y `render()` construye las filas de la tabla.
+3. JavaScript ejecuta `initialize()` en `web/app.js` y consulta `GET /api/sesion` antes de pedir el catálogo.
+4. Si el modo es privado y no hay usuario, redirige a `/login`. Si hay sesión o es una demo, muestra la identidad o el aviso de demostración y aplica los permisos a los botones.
+5. `load()` llama a `api('/api/productos')` y `api('/api/movimientos')`; `api()` utiliza `fetch()` para enviar las peticiones.
+6. Flask busca la ruta y, en modo privado, comprueba que la cuenta esté activa y tenga permiso para consultar.
+7. La ruta llama al servicio de inventario en modo privado, o a `demo.py` en modo demo.
+8. El servicio consulta MySQL y devuelve diccionarios; la demo devuelve copias de sus datos ficticios. Flask convierte el resultado a JSON.
+9. JavaScript recibe los datos y `render()` construye las filas de la tabla.
+
+Los botones de escritura empiezan ocultos en el HTML. Así no aparecen mientras se comprueba la sesión. Una cuenta de consulta tampoco verá acciones nuevas al cambiar entre las pestañas de productos y movimientos.
 
 Los formularios anteriores de `templates/` ya no se renderizan. Una visita GET a `/registrar` o `/editar/{id}` redirige al panel. Un POST a esas rutas o a `/eliminar/{id}` recibe 410 sin usar la base. Así, el panel comparte una sola forma de modificar productos y existencias.
+
+### Identidad, permisos y CSRF
+
+**Autenticar** es comprobar quién entra: `usuarios.autenticar()` busca la cuenta y compara la contraseña con su hash `scrypt`. El backend guarda el ID de usuario en la sesión Flask; la contraseña no se guarda en texto claro ni se devuelve al navegador. Si la cuenta no existe, está inactiva o la clave es incorrecta, la respuesta de acceso es el mismo 401 genérico.
+
+La sesión utiliza una cookie firmada `HttpOnly` con `SameSite=Lax` y una duración configurada de 30 minutos. `HttpOnly` impide que JavaScript lea esa cookie; el navegador la envía con las peticiones al servidor. El backend vuelve a consultar la cuenta para comprobar su estado activo y su rol, en lugar de confiar en un rol conservado en el navegador.
+
+**Autorizar** es decidir qué puede hacer esa cuenta. `seguridad.py` contiene la relación entre los roles y los permisos:
+
+| Rol | Permisos | Acciones del panel |
+| --- | --- | --- |
+| `consulta` | `consultar` | Ver productos e historial. |
+| `operador` | `consultar`, `mover_stock` | Consultar y registrar entradas o salidas. |
+| `administrador` | Los anteriores y `gestionar_productos` | También crear, editar y eliminar productos. |
+
+El servidor devuelve los permisos en `/api/sesion`. La función `can()` de `web/app.js` los utiliza para mostrar los controles. La comprobación decisiva está en `app.py`, antes de llamar al servicio: manipular los botones del navegador no evita un 403 del backend.
+
+**CSRF** protege las escrituras frente a peticiones iniciadas desde otro sitio aprovechando una sesión abierta. JavaScript consulta primero `/api/sesion` y conserva su `csrf_token` en memoria. La función `api()` añade la cabecera `X-CSRF-Token` a las escrituras, incluidos login y logout. El backend compara ese valor con el de la sesión y también comprueba `Origin` cuando está presente.
+
+El recorrido del acceso es:
+
+1. `web/login.js` consulta `/api/sesion` para obtener el token inicial.
+2. Envía `POST /api/login` con `nombre`, `clave` y la cabecera CSRF.
+3. Flask valida la cuenta, crea la sesión de usuario y devuelve un token nuevo.
+4. El navegador vuelve al panel, que consulta otra vez el estado de sesión.
+5. `POST /api/logout` utiliza el token actual, borra la identidad de la sesión y devuelve otro token para el estado anónimo.
+
+La clave y el token no se guardan en `localStorage`. El formulario bloquea el envío mientras espera la respuesta y muestra los errores con `role="alert"`. Un 401 recibido por el panel redirige a `/login`; un 401 de acceso se muestra como error de credenciales.
+
+El límite permite 5 intentos de acceso por IP en 300 segundos. `IntentosLogin` guarda ese contador en la memoria del proceso y devuelve una espera al alcanzar el límite; Flask responde 429 con `Retry-After`. Reiniciar el proceso pierde los contadores y varios procesos no los comparten. Antes de desplegar necesitas un límite compartido en el proxy o en un servicio como Redis.
+
+### Explorar la demo
+
+En PowerShell puedes iniciarla así:
+
+```powershell
+$env:APP_MODE = 'demo'
+pipenv run python app.py
+```
+
+En una shell de macOS o Linux, usa `APP_MODE=demo pipenv run python app.py`. El panel muestra «Demostración · datos ficticios · solo lectura», permite consultar sin iniciar sesión y no ofrece botones de escritura. Todas las escrituras de API, incluido el acceso y el cierre de sesión, se rechazan con 403; visitar `/login` devuelve al panel. El aislamiento también está en el backend: este modo lee `demo.py` y no consulta ni el catálogo ni las cuentas de MySQL.
 
 ## 4. Una ruta y una regla tienen responsabilidades distintas
 
@@ -74,6 +135,8 @@ def actualizar_producto(producto_id):
 El decorador `@app.put(...)` registra la ruta. `<int:producto_id>` convierte el segmento de la dirección en un entero. `datos_json()` comprueba que el cuerpo sea un objeto JSON y `jsonify()` convierte el resultado de Python en una respuesta JSON.
 
 La ruta se ocupa del protocolo HTTP. La regla «editar un producto no cambia su stock» vive en el servicio: este lee las existencias guardadas con `SELECT ... FOR UPDATE`, valida los demás campos y ejecuta un `UPDATE` que no incluye stock. No exige el campo `stock` y lo ignora si llega en los datos.
+
+Antes de ejecutar esa ruta, `comprobar_solicitud()` verifica sesión, permiso `gestionar_productos` y CSRF. Estas reglas de acceso pertenecen a la capa web; la regla de conservar las existencias pertenece al servicio.
 
 El servicio ofrece ocho funciones públicas:
 
@@ -125,8 +188,8 @@ print(precio <= 0)  # False
 
 Supongamos que un teclado tiene 10 unidades. En el panel eliges una salida de 4:
 
-1. JavaScript envía `POST /api/productos/1/movimientos` con `{"tipo": "Salida", "cantidad": 4}`.
-2. La ruta Flask lee el objeto JSON y llama a `registrar_movimiento(1, datos)`.
+1. JavaScript envía `POST /api/productos/1/movimientos` con `{"tipo": "Salida", "cantidad": 4}`, la cookie de sesión y `X-CSRF-Token`.
+2. Flask comprueba la cuenta, el permiso `mover_stock` y el token. Después lee el objeto JSON y llama a `registrar_movimiento(1, datos)`.
 3. El servicio comprueba que la cantidad sea un entero positivo dentro del rango admitido y que el tipo sea válido.
 4. `SELECT stock ... FOR UPDATE` lee las existencias y bloquea ese producto durante la transacción.
 5. Calcula `10 - 4 = 6`. Si el resultado fuera negativo, rechazaría la operación.
@@ -177,7 +240,9 @@ El script inicial usa `IF NOT EXISTS`. Puedes volver a ejecutarlo para crear obj
 
 Flask traduce los resultados y errores a HTTP. Un alta devuelve 201 y una cabecera `Location` con la dirección `/api/productos/{id}`, que puede consultarse con GET. Los datos inválidos devuelven 400; `ProductoNoEncontrado`, 404; y `ConflictoInventario`, 409. También hay respuestas JSON para cuerpo demasiado grande (413), formato distinto de JSON (415) y fallos del acceso a MySQL (503).
 
-El servidor acepta hosts locales y comprueba que un `Origin` presente en una escritura coincida con el origen de la petición. No hay autenticación todavía: queda pendiente antes de preparar un despliegue público.
+La API de acceso añade `GET /api/sesion`, `POST /api/login` y `POST /api/logout`. `/api/sesion` es público y devuelve `usuario` o `null`, `modo_demo`, `permisos` y `csrf_token`. Las rutas privadas de inventario requieren login. Un 401 indica sesión ausente o credenciales incorrectas; un 403 puede indicar permiso insuficiente, CSRF inválido, origen ajeno o escritura en demo; un 429 indica que se alcanzó el límite de intentos de acceso.
+
+El servidor valida el host contra `TRUSTED_HOSTS`, que admite hosts locales por defecto. Estas comprobaciones de acceso y la configuración para producción ya existen; el despliegue público HTTPS sigue pendiente.
 
 ## 9. Qué demuestran las pruebas
 
@@ -187,24 +252,43 @@ pipenv run python -m pytest -q
 
 Una prueba prepara datos, ejecuta una operación y compara el resultado con lo esperado usando `assert`. Las pruebas de modelo verifican reglas de datos; las del servicio usan conexiones simuladas para comprobar consultas, resultados, rollback y cierre de recursos.
 
-Las pruebas HTTP construyen la aplicación con `create_app()` y usan su cliente de pruebas. Comprueban rutas, códigos, cabeceras y JSON. Hay casos que recorren la ruta y el servicio completos con la conexión MySQL sustituida por una simulación.
+Las pruebas HTTP construyen la aplicación con `create_app()` y usan su cliente de pruebas. Comprueban rutas, códigos, cabeceras y JSON. Hay casos que recorren la ruta y el servicio completos con la conexión MySQL sustituida por una simulación. Las pruebas de acceso cubren los roles, la sesión, CSRF, los hashes de contraseña y el límite de intentos. Las de demo comprueban que no se invoquen conexiones ni operaciones del inventario real.
 
 Por ejemplo, una prueba de salida verifica que 10 menos 4 produzca 6 y que el historial reciba esos valores. Otra simula un fallo al insertar el movimiento y comprueba que se invoque `rollback()`. La edición se prueba también sin campo stock y con un valor de stock que el servicio debe ignorar.
 
-La comprobación local confirmó una conexión a MySQL y las columnas requeridas en las tablas existentes. También se abrió el panel Flask en el navegador y se consultaron datos reales sin realizar escrituras. Quedan pendientes importar el esquema nuevo en una base desechable, comprobar sus restricciones y probar los flujos completos de escritura. Las conexiones simuladas de la suite no sustituyen esas pruebas. GitHub Actions ejecutará la suite al publicar cambios mediante `.github/workflows/tests.yml`.
+La suite opcional de `tests/test_mysql_acceso.py` ya se ejecutó contra MySQL real. Cada prueba crea una base temporal `inventario_test_<uuid>`, importa el esquema y elimina únicamente esa base al terminar. Se verificaron login, alta y consulta de un producto, salida con historial, logout, permisos de consulta, revocación de la sesión al desactivar una cuenta y repetición de la migración de acceso sin borrar cuentas.
+
+Estas pruebas requieren una conexión MySQL configurada y permisos para crear y eliminar bases de datos. Se omiten por defecto; para ejecutarlas en PowerShell:
+
+```powershell
+$env:RUN_MYSQL_INTEGRATION = '1'
+pipenv run python -m pytest tests/test_mysql_acceso.py -m mysql -q
+Remove-Item Env:RUN_MYSQL_INTEGRATION
+```
+
+La eliminación de la variable vuelve a dejar desactivada la integración opcional para las siguientes ejecuciones de esa terminal. Las pruebas operan sobre sus bases temporales, conservando el catálogo configurado originalmente.
+
+El 22 de octubre de 2026 también se completó una revisión manual del navegador con una cuenta temporal de administrador y MySQL real: acceso, alta de «Cuaderno de revisión» con stock 10 y precio 45.90, salida de 4 unidades, stock resultante 6, historial de 10 a 6 y cierre de sesión con vuelta al acceso. En una ventana de 390 × 844 se comprobó que la tabla mantuviera el desplazamiento horizontal dentro de su contenedor. Las bases temporales de esta revisión se eliminaron al terminar. Las capturas y el alcance están en el [registro de verificación](verificacion.md).
+
+Quedan pendientes automatizar ese recorrido del navegador, cubrir visualmente los otros roles, probar la concurrencia con MySQL real y ampliar la comprobación de restricciones. Las conexiones simuladas permiten verificar que el código solicite rollback, pero no demuestran por sí solas que MySQL haya revertido los cambios.
+
+El workflow `.github/workflows/tests.yml` configura dos trabajos en cada push y pull request. `tests` ejecuta la suite habitual y una comprobación HTTP de la demo con Gunicorn, sin MySQL. `mysql-integration` activa las pruebas reales y utiliza un servicio MySQL 8.4. Localmente la integración sigue siendo opcional; el estado remoto se consulta en [GitHub Actions](https://github.com/nandillo156-bot/sistema-inventario-python/actions/workflows/tests.yml). Gunicorn sirve la aplicación WSGI en ese entorno Linux; en Windows el comando local sigue siendo `pipenv run python app.py`.
 
 ## 10. Qué está terminado y qué sigue
 
 | Etapa | Estado | Qué aprendes |
 | --- | --- | --- |
-| Esquema y configuración versionados | Implementados; importación y restricciones del SQL nuevo pendientes. | Entornos y restricciones. |
-| Panel con rutas Flask y servicio compartido | Implementado y consultado con MySQL real. | HTTP, factories y responsabilidades. |
-| Movimientos transaccionales del panel | Implementados y probados con conexión simulada. | Transacciones, bloqueos y errores. |
+| Esquema y configuración versionados | Esquema importado en MySQL temporal y migración de acceso repetible comprobada; falta ampliar las pruebas de restricciones. | Entornos y restricciones. |
+| Rutas Flask y servicio compartido | Probados con conexiones simuladas y con el cliente Flask contra MySQL real. | HTTP, factories y responsabilidades. |
+| Movimientos transaccionales del panel | Salida e historial verificados en MySQL real; errores y rollback comprobados con simulaciones. | Transacciones, bloqueos y errores. |
+| Acceso y permisos de consulta, operador y administrador | Implementados en el panel y el backend. | Autenticación, autorización, sesiones, hashes y CSRF. |
+| Demo ficticia sin MySQL | Implementada, con consultas públicas y escrituras bloqueadas. | Aislamiento de datos y modos de ejecución. |
 | Consola usando el mismo servicio | Pendiente. | Reutilización de reglas y eliminación de duplicación. |
-| Integración MySQL y navegador | Conexión y lectura comprobadas; flujos de escritura pendientes. | Pruebas con dependencias reales. |
-| Precios, autenticación y despliegue | Pendientes. | Precisión numérica y publicación de una demo. |
+| Integración MySQL y navegador | Integración automática y flujo manual de administrador verificados en bases temporales; faltan automatización del navegador, otros roles y concurrencia real. | Pruebas con dependencias reales. |
+| Auditoría persistente, restablecimiento de claves e interfaz de usuarios | Pendientes. | Trazabilidad y administración de cuentas. |
+| Precisión de precios y despliegue HTTPS | Pendientes. | Precisión numérica, servidor y límite de acceso compartido. |
 
-MySQL guarda dos decimales, pero el código todavía acepta precios con más decimales y usa `float` en algunas conversiones y en las respuestas JSON. La siguiente mejora debe definir cómo redondearlos y usar `Decimal` de extremo a extremo. La aplicación actual es local; esta etapa no publica un sitio.
+MySQL guarda dos decimales, pero el código todavía acepta precios con más decimales y usa `float` en algunas conversiones y en las respuestas JSON. Una siguiente mejora debe definir cómo redondearlos y usar `Decimal` de extremo a extremo. El historial aún no vincula cada operación a una cuenta, no hay recuperación de contraseña y las cuentas se crean por consola, sin una pantalla de administración. La consola de inventario anterior sigue usando su propio acceso a la base. Esta etapa prepara una demo local; no equivale a un despliegue de producción completo.
 
 ## 11. Ejercicios cortos para entenderlo
 
@@ -214,5 +298,9 @@ MySQL guarda dos decimales, pero el código todavía acepta precios con más dec
 4. En una prueba de salida válida, identifica el stock anterior 10 y el nuevo stock 6.
 5. Explica en qué momento se ejecutan `yield` y `finally` cuando un bloque `with _sesion()` termina con `return`.
 6. Describe por qué un nombre duplicado devuelve 409 y un ID inexistente devuelve 404.
+7. Compara `can()` en JavaScript con `comprobar_solicitud()` en Flask: explica por qué ocultar un botón no basta para dar seguridad.
+8. Sigue el token CSRF desde `GET /api/sesion` hasta la cabecera enviada al registrar un movimiento.
+9. Explica por qué una petición sin sesión devuelve 401 y una cuenta de consulta que intenta escribir recibe 403.
+10. Sigue una consulta en modo demo y comprueba por qué no necesita `conexion.py` ni MySQL.
 
-Para una entrevista, practica esta explicación: «Mi frontend envía peticiones HTTP a Flask. Las rutas delegan en un servicio que valida los datos y usa consultas parametrizadas para MySQL. En el panel, el cambio de stock y su historial se guardan en una misma transacción. Pruebo las reglas y la API con conexiones simuladas, he comprobado consultas con MySQL real y tengo pendientes los flujos de escritura y el despliegue».
+Para una entrevista, practica esta explicación: «Mi frontend consulta la sesión y adapta sus acciones a los permisos. Flask comprueba la cuenta, el rol y CSRF antes de delegar en un servicio con consultas parametrizadas. El cambio de stock y su historial se guardan en una misma transacción. La demo usa datos ficticios sin conectar MySQL. Validé acceso, altas y movimientos contra MySQL real en bases temporales, tanto con pruebas automáticas como mediante un recorrido manual del navegador. Tengo pendientes la concurrencia real, automatizar y ampliar los recorridos del navegador, la auditoría persistente y el despliegue HTTPS».

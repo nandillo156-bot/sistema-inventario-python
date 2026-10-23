@@ -54,9 +54,26 @@ def servicios(monkeypatch):
 
 
 @pytest.fixture
-def cliente(servicios):
-    aplicacion = modulo_app.create_app({"TESTING": True})
-    return aplicacion.test_client()
+def cliente(servicios, monkeypatch):
+    monkeypatch.setattr(
+        modulo_app.usuarios,
+        "obtener_usuario",
+        MagicMock(return_value={"id": 7, "nombre": "admin", "rol": "administrador"}),
+    )
+    aplicacion = modulo_app.create_app(
+        {
+            "TESTING": True,
+            "SECRET_KEY": "clave-pruebas",
+            "APP_MODE": "private",
+            "APP_ENV": "development",
+        }
+    )
+    cliente = aplicacion.test_client()
+    with cliente.session_transaction() as sesion:
+        sesion["usuario_id"] = 7
+        sesion["csrf_token"] = "csrf-pruebas"
+    cliente.environ_base["HTTP_X_CSRF_TOKEN"] = "csrf-pruebas"
+    return cliente
 
 
 def comprobar_error(respuesta, estado):
@@ -85,6 +102,9 @@ def test_factory_y_aplicacion_global_disponibles():
         ("/productos", "index.html", "text/html"),
         ("/app.js", "app.js", "text/javascript"),
         ("/style.css", "style.css", "text/css"),
+        ("/login", "login.html", "text/html"),
+        ("/login.js", "login.js", "text/javascript"),
+        ("/auth.css", "auth.css", "text/css"),
     ],
 )
 def test_interfaz_sirve_los_recursos_del_panel(cliente, servicios, ruta, archivo, mime):
@@ -92,7 +112,7 @@ def test_interfaz_sirve_los_recursos_del_panel(cliente, servicios, ruta, archivo
 
     assert respuesta.status_code == 200
     assert respuesta.mimetype in (
-        {"text/javascript", "application/javascript"} if archivo == "app.js" else {mime}
+        {"text/javascript", "application/javascript"} if archivo.endswith(".js") else {mime}
     )
     esperado = Path(__file__).resolve().parents[1] / "web" / archivo
     assert respuesta.data == esperado.read_bytes()

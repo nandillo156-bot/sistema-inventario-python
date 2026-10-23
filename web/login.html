@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Iniciar sesión · Inventario</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/auth.css">
+  <script src="/login.js" defer></script>
+</head>
+<body class="auth-page">
+  <main class="auth-layout">
+    <div class="auth-story">
+      <a class="brand" href="/" aria-label="Inventario, inicio">
+        <span class="logo">i.</span> inventario<span class="brand-dot">®</span>
+      </a>
+      <div class="auth-story-copy">
+        <p class="eyebrow">TODO EN SU LUGAR</p>
+        <h1>Tu inventario.<br>Tu espacio de trabajo<span>.</span></h1>
+        <p>Consulta tus productos, sigue cada movimiento y mantén tus existencias en orden.</p>
+      </div>
+      <p class="auth-story-footer">Un espacio para cada producto.</p>
+    </div>
+    <section class="auth-content" aria-labelledby="login-title">
+      <div class="auth-card">
+        <p class="eyebrow">BIENVENIDO A TU ESPACIO</p>
+        <h2 id="login-title">Iniciar sesión</h2>
+        <p id="login-description" class="muted">Usa la cuenta asignada para acceder a tu inventario.</p>
+        <form id="login-form" aria-describedby="login-description" aria-busy="true">
+          <fieldset id="login-fields" disabled>
+            <label for="login-user">Usuario</label>
+            <input id="login-user" name="nombre" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+            <label for="login-password">Contraseña</label>
+            <input id="login-password" name="clave" type="password" autocomplete="current-password" required>
+            <button id="login-submit" class="primary" type="submit" disabled>Preparando acceso…</button>
+          </fieldset>
+          <p id="login-status" class="auth-status" role="status">Comprobando sesión…</p>
+          <p id="login-error" class="form-error" role="alert" aria-atomic="true"></p>
+          <button id="session-retry" class="secondary" type="button" hidden>Volver a intentar</button>
+        </form>
+        <p class="auth-help">Las acciones disponibles dependen de los permisos de tu cuenta.</p>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

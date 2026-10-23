@@ -25,3 +25,86 @@ jobs:
         run: pipenv sync --dev
       - name: Ejecutar pruebas sin base de datos
         run: pipenv run python -m pytest -q
+      - name: Comprobar la demo con Gunicorn, sin MySQL
+        env:
+          APP_MODE: demo
+          APP_ENV: production
+          PYTHON_DOTENV_DISABLED: "1"
+          FLASK_SECRET_KEY: clave-publica-exclusiva-del-arranque-de-pruebas
+          TRUSTED_HOSTS: 127.0.0.1
+        run: |
+          pipenv run gunicorn app:app --bind 127.0.0.1:8000 --workers 1 &
+          demo_pid=$!
+          trap 'kill "$demo_pid"' EXIT
+          pipenv run python - <<'PY'
+          import json
+          import time
+          import urllib.error
+          import urllib.request
+
+          url = "http://127.0.0.1:8000/api/productos"
+          for intento in range(30):
+              try:
+                  with urllib.request.urlopen(url, timeout=2) as respuesta:
+                      productos = json.load(respuesta)
+                  break
+              except (urllib.error.URLError, TimeoutError):
+                  time.sleep(0.5)
+          else:
+              raise SystemExit("La demo no arrancó con Gunicorn.")
+          assert len(productos) == 4
+          escritura = urllib.request.Request(url, data=b'{}', method="POST")
+          try:
+              urllib.request.urlopen(escritura, timeout=2)
+          except urllib.error.HTTPError as error:
+              assert error.code == 403
+          else:
+              raise AssertionError("La demo permitió escribir.")
+          print("Demo HTTP: catálogo disponible y escrituras bloqueadas.")
+          PY
+
+  mysql-integration:
+    name: Integración con MySQL 8.4
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PIPENV_VENV_IN_PROJECT: "1"
+      PIPENV_DONT_LOAD_ENV: "1"
+      PYTHON_DOTENV_DISABLED: "1"
+      APP_ENV: development
+      APP_MODE: private
+      DB_HOST: 127.0.0.1
+      DB_USER: root
+      # Credencial pública exclusiva del contenedor desechable de CI.
+      DB_PASSWORD: prueba-ci-mysql
+      DB_DATABASE: ci_bootstrap
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: prueba-ci-mysql
+          MYSQL_ROOT_HOST: "%"
+          MYSQL_DATABASE: ci_bootstrap
+        ports:
+          # Puerto libre del runner, separado de cualquier MySQL preinstalado.
+          - 3306/tcp
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -u root -pprueba-ci-mysql --silent"
+          --health-start-period 20s
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Instalar Pipenv
+        run: python -m pip install pipenv
+      - name: Instalar las versiones fijadas
+        run: pipenv sync --dev
+      - name: Verificar acceso, inventario y migración en bases temporales
+        env:
+          DB_PORT: ${{ job.services.mysql.ports['3306'] }}
+          RUN_MYSQL_INTEGRATION: "1"
+        run: pipenv run python -m pytest -q -m mysql tests/test_mysql_acceso.py

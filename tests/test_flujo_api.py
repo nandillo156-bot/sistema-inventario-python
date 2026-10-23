@@ -6,7 +6,7 @@ from urllib.parse import urlsplit
 import mysql.connector
 import pytest
 
-from app import create_app
+import app as modulo_app
 import servicio_inventario as servicio
 
 
@@ -27,8 +27,26 @@ def base_simulada(monkeypatch):
 
 
 @pytest.fixture
-def cliente():
-    return create_app({"TESTING": True}).test_client()
+def cliente(monkeypatch):
+    monkeypatch.setattr(
+        modulo_app.usuarios,
+        "obtener_usuario",
+        MagicMock(return_value={"id": 7, "nombre": "admin", "rol": "administrador"}),
+    )
+    aplicacion = modulo_app.create_app(
+        {
+            "TESTING": True,
+            "SECRET_KEY": "clave-pruebas",
+            "APP_MODE": "private",
+            "APP_ENV": "development",
+        }
+    )
+    cliente = aplicacion.test_client()
+    with cliente.session_transaction() as sesion:
+        sesion["usuario_id"] = 7
+        sesion["csrf_token"] = "csrf-pruebas"
+    cliente.environ_base["HTTP_X_CSRF_TOKEN"] = "csrf-pruebas"
+    return cliente
 
 
 def test_alta_normaliza_datos_y_devuelve_ubicacion_del_producto(cliente, base_simulada):
